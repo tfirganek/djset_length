@@ -1,11 +1,13 @@
 import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
+from tkinter.messagebox import showerror
 import pandas as pd
 import xmltodict
 import datetime
 
 # TODO
 
-class APP:
+class App:
 
     def __init__(self):
         # creating app window
@@ -49,16 +51,12 @@ class APP:
         self.button = tk.Button(self.root, text="Calculate", font=('calibre', 15), command=self.calculate_length)
         self.button.pack(pady=5)
 
-        # tracks lenght output
-        self.tracks_output_label = tk.Label(self.root, text="", font=('calibre', 12), justify="left")
-        self.tracks_output_label.pack()
-
-        # full playlist length output
-        self.playlist_output_label = tk.Label(self.root, text="", font=('calibre', 15, 'bold'))
-        self.playlist_output_label.pack(pady=10)
-
         # window loop
         self.root.mainloop()
+
+
+    
+    ######### METHODS #########
 
     def get_playlist_df(self):
         playlist_name = self.playlist.get()
@@ -68,7 +66,9 @@ class APP:
         try:
             df_playlist = pd.read_fwf(f'/Users/tomek/Documents/rekordbox/{playlist_name.upper()}.txt', encoding='latin')
         except FileNotFoundError:
-            self.tracks_output_label.config(text=f'No file for "{playlist_name}" playlist, try downloading .txt from rekordbox')
+            showerror(title='No such file', message=f'No file for "{playlist_name}" playlist. Check if the name is correct or try downloading a playlist .txt from rekordbox')
+
+            
 
         # clean playlist data
         df_playlist = df_playlist[df_playlist.columns[0]].apply(lambda x: '; '.join(x.split('\t', 3)[:3]))
@@ -96,6 +96,7 @@ class APP:
         df = df_current_tracks.merge(df_library, on='@Name')
 
         return df
+
 
     def calculate_length(self):
         # get playlist dataframe
@@ -137,12 +138,30 @@ class APP:
             else:
                 tracks_output_str += f'Track "{track_name}" has no end cue, skipping \n'
 
+        tracks_output_str = tracks_output_str.rstrip()
         playlist_output_str = f'{self.playlist.get()} has {str(datetime.timedelta(seconds=total_length)).split(".")[0]}'
 
-        # output track lengths
-        self.tracks_output_label.config(text=tracks_output_str)
+        self.destroy_output()
 
-        # output playlist length
-        self.playlist_output_label.config(text=playlist_output_str)
+        # tracks lenght output
+        self.tracks_output = ScrolledText(self.root, height=10, width=50, state='normal', font=('calibre', 12))
+        self.tracks_output.pack(pady=5)
 
-APP()
+        self.tracks_output.insert(tk.INSERT, tracks_output_str)
+        self.tracks_output.config(state='disabled')
+
+        # full playlist length output
+        self.playlist_len_output = tk.Label(self.root, text=playlist_output_str, font=('calibre', 15, 'bold'))
+        self.playlist_len_output.pack(pady=10)
+
+    def destroy_output(self) -> None:
+        if 'tracks_output' in self.__dict__.keys():
+            self.tracks_output.pack_forget()
+        else:
+            pass
+
+        if 'playlist_len_output' in self.__dict__.keys():
+            self.playlist_len_output.pack_forget()
+        else:
+            pass
+App()
