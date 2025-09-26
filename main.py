@@ -13,12 +13,13 @@ class App:
         # creating app window
         self.root = tk.Tk()
         self.root.geometry("500x500")
-        self.root.title("DSLC")
+        self.root.title("DJ Set Length")
 
         # setting input variables
         self.playlist = tk.StringVar()
         self.n_tracks = tk.IntVar()
         self.bpm = tk.IntVar()
+        self.vcmd = self.root.register(self.validate_int_input)
 
         # app header
         self.label = tk.Label(self.root, text="DJ set length checker", font=('calibre', 20, 'bold'))
@@ -37,14 +38,14 @@ class App:
         self.bpm_label = tk.Label(self.root, text="Playlist bpm:", font=('calibre', 15))
         self.bpm_label.pack()
 
-        self.bpm_entry = tk.Entry(self.root, textvariable=self.bpm)
+        self.bpm_entry = tk.Entry(self.root, textvariable=self.bpm, validate="key", validatecommand=(self.vcmd, "%P"))
         self.bpm_entry.pack()
 
         # number of tracks
         self.n_tracks_label = tk.Label(self.root, text="Number of tracks:", font=('calibre', 15))
         self.n_tracks_label.pack()
 
-        self.n_tracks_entry = tk.Entry(self.root, textvariable=self.n_tracks)
+        self.n_tracks_entry = tk.Entry(self.root, textvariable=self.n_tracks, validate="key", validatecommand=(self.vcmd, "%P"))
         self.n_tracks_entry.pack()
 
         # button
@@ -58,50 +59,10 @@ class App:
     
     ######### METHODS #########
 
-    def get_playlist_df(self):
-        playlist_name = self.playlist.get()
-        n_tracks = self.n_tracks.get()
-
-        # import playlist data
-        try:
-            df_playlist = pd.read_fwf(f'/Users/tomek/Documents/rekordbox/{playlist_name.upper()}.txt', encoding='latin')
-        except FileNotFoundError:
-            showerror(title='No such file', message=f'No file for "{playlist_name}" playlist. Check if the name is correct or try downloading a playlist .txt from rekordbox')
-
-            
-
-        # clean playlist data
-        df_playlist = df_playlist[df_playlist.columns[0]].apply(lambda x: '; '.join(x.split('\t', 3)[:3]))
-        df_playlist = df_playlist.str.split(';',expand=True)
-        df_playlist = df_playlist[[0, 2]]
-        df_playlist[2] = df_playlist[2].str.strip()
-        df_playlist.columns = ['@Number','@Name']
-        df_playlist.dropna(inplace=True)
-        df_playlist['@Number'] = df_playlist['@Number'].str.replace('\x00', '', regex=False).astype(int)
-        df_playlist.sort_values(by='@Number', inplace=True)
-
-        # select n tracks
-        df_current_tracks = df_playlist.head(n_tracks)
-        df_current_tracks.loc[:,'@Name'] = df_current_tracks['@Name'].str.replace('\x00', '', regex=False)
-
-        # import collection data
-        with open('/Users/tomek/Documents/rekordbox/rekordbox.xml') as fd:
-            doc = xmltodict.parse(fd.read())
-        doc = doc['DJ_PLAYLISTS']['COLLECTION']['TRACK']
-        df_library = pd.DataFrame(doc)
-
-        df_library = df_library[df_library['@Location'].str.contains('file://localhost/Users/tomek/Desktop/DJ%20VAULT/')]
-
-        # calculate track times
-        df = df_current_tracks.merge(df_library, on='@Name')
-
-        return df
-
-
-    def calculate_length(self):
+    def calculate_length(self) -> None:
         # get playlist dataframe
         df = self.get_playlist_df()
-        if isinstance(df, str):
+        if not isinstance(df, pd.DataFrame):
             return
 
         # iterate through df to calculate each track length - from cuepoint A to G (cue A=0, cue G=6)
@@ -154,6 +115,48 @@ class App:
         self.playlist_len_output = tk.Label(self.root, text=playlist_output_str, font=('calibre', 15, 'bold'))
         self.playlist_len_output.pack(pady=10)
 
+
+
+    def get_playlist_df(self) -> pd.DataFrame:
+        playlist_name = self.playlist.get()
+        n_tracks = self.n_tracks.get()
+
+        # import playlist data
+        try:
+            df_playlist = pd.read_fwf(f'/Users/tomek/Documents/rekordbox/{playlist_name.upper()}.txt', encoding='latin')
+        except FileNotFoundError:
+            showerror(title='No such file', message=f'No file for "{playlist_name}" playlist. Check if the name is correct or try downloading a playlist .txt from rekordbox')
+            return None
+
+        # clean playlist data
+        df_playlist = df_playlist[df_playlist.columns[0]].apply(lambda x: '; '.join(x.split('\t', 3)[:3]))
+        df_playlist = df_playlist.str.split(';',expand=True)
+        df_playlist = df_playlist[[0, 2]]
+        df_playlist[2] = df_playlist[2].str.strip()
+        df_playlist.columns = ['@Number','@Name']
+        df_playlist.dropna(inplace=True)
+        df_playlist['@Number'] = df_playlist['@Number'].str.replace('\x00', '', regex=False).astype(int)
+        df_playlist.sort_values(by='@Number', inplace=True)
+
+        # select n tracks
+        df_current_tracks = df_playlist.head(n_tracks)
+        df_current_tracks.loc[:,'@Name'] = df_current_tracks['@Name'].str.replace('\x00', '', regex=False)
+
+        # import collection data
+        with open('/Users/tomek/Documents/rekordbox/rekordbox.xml') as fd:
+            doc = xmltodict.parse(fd.read())
+        doc = doc['DJ_PLAYLISTS']['COLLECTION']['TRACK']
+        df_library = pd.DataFrame(doc)
+
+        df_library = df_library[df_library['@Location'].str.contains('file://localhost/Users/tomek/Desktop/DJ%20VAULT/')]
+
+        # calculate track times
+        df = df_current_tracks.merge(df_library, on='@Name')
+
+        return df
+
+
+
     def destroy_output(self) -> None:
         if 'tracks_output' in self.__dict__.keys():
             self.tracks_output.pack_forget()
@@ -164,4 +167,14 @@ class App:
             self.playlist_len_output.pack_forget()
         else:
             pass
+
+
+
+    def validate_int_input(self, P):
+        if P.isdigit() or P == "":
+            return True
+        else:
+            return False
+
+
 App()
